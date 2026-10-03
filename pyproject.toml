@@ -20,6 +20,7 @@ dependencies = [
     "requests>=2.34.2",
     "skforecast>=0.25.0",
     "sktime>=1.2.0",
+    "timesfm[torch]>=3.0.2",
     "torch>=2.14.1",
 ]
 
@@ -58,6 +59,11 @@ warn_return_any = true
 warn_unreachable = true
 warn_unused_configs = true
 no_implicit_reexport = true
+
+# torch's stubs return Any from nn.Module calls and type parameters sharing loosely
+[[tool.mypy.overrides]]
+module = "tsforecasting.models.deep"
+disable_error_code = ["no-any-return", "assignment", "type-arg"]
 
 # Configure ruff (linter + formatter)
 [tool.ruff]

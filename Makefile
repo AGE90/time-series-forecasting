@@ -46,18 +46,15 @@ notebook: ## Launch Jupyter Lab
 	uv run --with jupyterlab jupyter lab
 
 # Pipeline commands (data/raw -> data/interim -> data/processed -> models)
-.PHONY: data features train predict pipeline
-data: ## Clean raw data into data/interim
+.PHONY: data features train pipeline
+data: ## Download Jena climate and clean it into data/interim (hourly parquet)
 	uv run python -m tsforecasting.data.make_dataset
 
-features: ## Build features into data/processed
+features: ## Build wind-vector and calendar features into data/processed
 	uv run python -m tsforecasting.features.build_features
 
-train: ## Train the model and save it to models/
+train: ## Benchmark all model families (24 h backtest), log to MLflow, write reports/leaderboard.csv
 	uv run python -m tsforecasting.models.train_model
-
-predict: ## Write predictions to data/processed
-	uv run python -m tsforecasting.models.predict_model
 
 pipeline: data features train ## Run data, features and train in order
 

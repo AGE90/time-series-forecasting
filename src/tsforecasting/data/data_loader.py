@@ -2,80 +2,46 @@
 Data loading utilities.
 """
 
-from pathlib import Path
-
-import numpy as np
 import pandas as pd
 
+from tsforecasting.utils.paths import data_processed_dir
 
-def load_csv(filepath: str | Path, **kwargs) -> pd.DataFrame:
-    """Load data from a CSV file.
+
+def load_jena(features_file: str = "jena_features.parquet") -> pd.DataFrame:
+    """Load the hourly Jena climate features built by `make data features`."""
+    path = data_processed_dir(features_file)
+    if not path.exists():
+        raise FileNotFoundError(f"{path} not found. Run `make data features` first.")
+    return pd.read_parquet(path).asfreq("h")  # parquet drops the index freq
+
+
+def load_airline() -> pd.Series:
+    """Box-Jenkins monthly airline passengers 1949-1960 (classic SARIMA example)."""
+    from sktime.datasets import load_airline as _load
+
+    y = _load()
+    y.index = y.index.to_timestamp()
+    return y.asfreq("MS")
+
+
+def temporal_split(
+    df: pd.DataFrame, fractions: tuple[float, float, float] = (0.7, 0.2, 0.1)
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """
+    Chronological train/val/test split (no shuffling: the future must not leak).
 
     Parameters
     ----------
-    filepath : Union[str, Path]
-        Path to the CSV file
+    df : pandas.DataFrame
+        Time-ordered data.
+    fractions : tuple of float
+        Train, validation and test fractions summing to 1.
 
     Returns
     -------
-    pd.DataFrame
-        Loaded data
+    tuple of pandas.DataFrame
+        Train, validation and test frames.
     """
-
-    return pd.read_csv(filepath, **kwargs)
-
-
-def load_excel(
-    filepath: str | Path, sheet_name: str | int | None = 0, **kwargs
-) -> pd.DataFrame:
-    """Load data from an Excel file.
-
-    Parameters
-    ----------
-    filepath : Union[str, Path]
-        Path to the Excel file
-    sheet_name : Optional[Union[str, int]], optional
-        Name or index of the sheet to load, by default 0
-
-    Returns
-    -------
-    pd.DataFrame
-        Loaded data
-    """
-
-    return pd.read_excel(filepath, sheet_name=sheet_name, **kwargs)
-
-
-def load_parquet(filepath: str | Path, **kwargs) -> pd.DataFrame:
-    """Load data from a Parquet file.
-
-    Parameters
-    ----------
-    filepath : Union[str, Path]
-        Path to the Parquet file
-
-    Returns
-    -------
-    pd.DataFrame
-        Loaded data
-    """
-
-    return pd.read_parquet(filepath, **kwargs)
-
-
-def load_numpy(filepath: str | Path, **kwargs) -> np.ndarray:
-    """Load data from a NumPy file.
-
-    Parameters
-    ----------
-    filepath : Union[str, Path]
-        Path to the NumPy file
-
-    Returns
-    -------
-    np.ndarray
-        Loaded data
-    """
-
-    data: np.ndarray = np.load(filepath, **kwargs)
-    return data
+    n = len(df)
+    i, j = int(n * fractions[0]), int(n * (fractions[0] + fractions[1]))
+    return df.iloc[:i], df.iloc[i:j], df.iloc[j:]

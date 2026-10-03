@@ -16,7 +16,9 @@ A laboratory for classical, ML, deep learning and foundation-model time-series f
 ## Commands
 
 - `make install`: install all dependency groups
-- `make data` / `make features` / `make train` / `make predict`: pipeline steps (`make pipeline` runs the first three). File names and `TARGET` are constants at the top of each module
+- `make data` / `make features` / `make train`: download+clean Jena, build features, run the 24 h benchmark of every model family (MLflow + `reports/leaderboard.csv`)
+- Models follow the `forecast_fn(y_train, h, X_train, X_future) -> DataFrame[mean, q10..q90]` contract in `tsforecasting.evaluation` so they share `backtest`/`score`
+- Notebooks are generated with outputs; keep math in `$...$` and lead with plots
 - `make check`: ruff format + ruff check + mypy
 - `make test`: pytest with coverage (tests live in `tests/unit` and `tests/e2e`)
 - `make mlflow-ui`: MLflow tracking UI

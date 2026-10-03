@@ -1,127 +1,85 @@
-# Time Series Forecasting
+# Time Series Forecasting Lab
 
-A laboratory for classical, ML, deep learning and foundation-model time-series forecasting
+A laboratory for studying time-series forecasting, from classical statistics to zero-shot foundation models. Every model family runs through the **same rolling-origin backtest and metrics**, so the numbers are comparable. The notebooks explain each method with math (`$…$`) and visualizations. Reusable logic lives in `src/tsforecasting/`.
 
-<!-- Add a brief overview of the project here. -->
-
----
-
-## Installation
-
-Requires [uv](https://docs.astral.sh/uv/getting-started/installation/). uv installs Python 3.11 for you if it is missing.
-
-```bash
-git clone <repository-url>
-cd time-series-forecasting
-make install                  # uv sync --all-groups: creates .venv with every dependency group
-uv run pre-commit install     # optional: lint and format on every commit
-```
-
-Run any command inside the environment with `uv run <command>`, or activate it with `source .venv/bin/activate`. Add dependencies with `uv add <package>` (or `uv add --group <dev|test|notebook|data-science|viz> <package>`) and update them with `uv lock --upgrade && uv sync`.
-
----
-
-## Usage
-
-Run `make help` to list every task.
-
-### Pipeline
-
-The pipeline is a set of small stubs to edit for your problem. Each step reads the previous step's output:
-
-| Command | Module | Reads | Writes |
+| # | Notebook | Topics | Libraries |
 |---|---|---|---|
-| `make data` | `data/make_dataset.py` | `data/raw/dataset.csv` | `data/interim/dataset_clean.csv` |
-| `make features` | `features/build_features.py` | `data/interim/dataset_clean.csv` | `data/processed/features.csv` |
-| `make train` | `models/train_model.py` | `data/processed/features.csv` | `models/model.joblib` |
-| `make predict` | `models/predict_model.py` | `models/model.joblib` + features | `data/processed/predictions.csv` |
+| 01 | `data_exploration` | STL decomposition, ACF/PACF, ADF/KPSS, periodogram, cyclical features | statsmodels |
+| 02 | `baselines_and_evaluation` | naive/seasonal naive, MAE/RMSE/sMAPE/MASE, pinball loss, rolling-origin backtesting | `tsforecasting.evaluation` |
+| 03 | `statistical_models` | Holt-Winters/ETS, AutoETS, SARIMA (airline model), residual diagnostics, Theta | statsmodels, sktime |
+| 04 | `ml_forecasting_skforecast` | reduction to regression, lags/window features/exog, recursive vs direct, bootstrap and conformal intervals | skforecast, LightGBM |
+| 05 | `sktime_unified_interface` | `fh`, reduction, transform pipelines, ensembles, `evaluate` | sktime |
+| 06 | `deep_learning_pytorch` | windowing, linear/dense/CNN/LSTM, single-shot vs autoregressive, residual nets | PyTorch |
+| 07 | `timesfm3_zero_shot` | patching, variate attention, quantile head, context length, calibration, multivariate and covariates, CPU vs GPU | TimesFM 3 |
+| 08 | `benchmark` | every family on the same 24 h task, error by lead time, per-fold spread, MLflow | all |
 
-`make pipeline` runs `data`, `features` and `train` in order. File names and the target column (`TARGET = "target"`) are constants at the top of each module.
+**Datasets:** Jena climate (hourly, 14 variables, 2009–2016, downloaded by `make data`) and Box-Jenkins airline passengers (monthly, from sktime).
 
-### Code quality and tests
+## Benchmark (`make train`)
 
-```bash
-make check    # ruff format + ruff check + mypy
-make test     # pytest with coverage
-```
+This table shows 24 h-ahead temperature forecasts from 20 origins over the last 10% of the Jena data. MASE below 1 beats the in-sample seasonal naive.
 
-### Paths and data
+| model | MASE | RMSE [°C] | 80% coverage |
+|---|---|---|---|
+| LSTM (PyTorch, single-shot) | 0.682 | 2.35 | – |
+| LightGBM (skforecast, recursive) | 0.699 | 2.39 | – |
+| **TimesFM 3, zero-shot** | 0.714 | **2.29** | 0.81 |
+| seasonal naive | 0.889 | 2.90 | – |
+| Theta (sktime) | 1.043 | 3.15 | – |
+| Holt-Winters (statsmodels) | 1.210 | 3.80 | – |
+| naive | 1.247 | 4.58 | – |
 
-Never hardcode paths. The helpers in `utils/paths.py` resolve from the project root, so they work the same in scripts, notebooks and tests:
+## Setup
 
-```python
-from tsforecasting.data.data_loader import load_csv
-from tsforecasting.utils.paths import data_raw_dir, reports_figures_dir
-from tsforecasting.visualization.visualize import plot_distribution
-
-df = load_csv(data_raw_dir("dataset.csv"))
-plot_distribution(
-    df["size"],
-    title="Size distribution",
-    xlabel="size",
-    save_path=reports_figures_dir("size.png"),
-)
-```
-
-### Notebooks
-
-Start Jupyter Lab with `make notebook`. Put reusable code in `src/` and import it; add this at the top of a notebook to pick up code changes without restarting the kernel:
-
-```python
-%load_ext autoreload
-%autoreload 2
-```
-
-### Experiment tracking (MLflow)
-
-`make train` logs parameters, metrics and the model to MLflow with `log_mlflow_experiment` (in `models/model_utils.py`). Runs are stored in `mlflow.db` and `mlruns/` at the project root (both git-ignored). Browse them with:
+Requires [uv](https://docs.astral.sh/uv/). Python 3.11 is installed automatically.
 
 ```bash
-make mlflow-ui    # http://127.0.0.1:5000
+make install          # all dependency groups (torch, sktime, skforecast, timesfm, …)
+make data features    # download Jena climate -> data/interim -> data/processed
+make train            # benchmark, logged to MLflow; `make mlflow-ui` to browse
+make notebook         # Jupyter Lab
+make help             # every task
 ```
 
----
+The first TimesFM call downloads `google/timesfm-3.0-pytorch` (~1.3 GB) to the Hugging Face cache.
 
-## Project Structure
+## Package layout
 
 ```text
-├── CLAUDE.md               <- Project conventions for Claude Code
-├── Makefile                <- Tasks: `make help`
-├── pyproject.toml          <- Metadata, dependency groups and tool configuration
-├── uv.lock                 <- Locked dependency versions
-├── app/                    <- Application entry point (if applicable)
-├── config/                 <- Configuration files
-├── data/
-│   ├── raw/                <- Original, immutable data
-│   ├── interim/            <- Intermediate, cleaned data
-│   ├── processed/          <- Final, model-ready data
-│   └── external/           <- Data from third-party sources
-├── docs/                   <- Developer guide and code of conduct
-├── logs/                   <- Log files
-├── models/                 <- Trained models
-├── notebooks/              <- Exploration notebooks, named e.g. `01-abc-initial-eda.ipynb`
-├── references/             <- Data dictionaries, manuals, papers
-├── reports/figures/        <- Generated figures
-├── scripts/                <- Helper shell scripts
-├── src/tsforecasting/
-│   ├── credentials.py      <- Loads secrets from `.env`
-│   ├── data/               <- Loading (`data_loader.py`) and cleaning (`make_dataset.py`)
-│   ├── features/           <- Feature engineering helpers and `build_features.py`
-│   ├── models/             <- Model helpers, `train_model.py`, `predict_model.py`
-│   ├── utils/paths.py      <- Project-relative path helpers
-│   └── visualization/      <- Plotting helpers
-└── tests/                  <- `unit/` and `e2e/` tests
+src/tsforecasting/
+├── evaluation.py            metrics, rolling_origin_splits, backtest, score
+├── data/make_dataset.py     download + hourly cleaning (make data)
+├── data/data_loader.py      load_jena, load_airline, temporal_split
+├── features/build_features.py  wind vector, sin/cos calendar features (make features)
+├── models/baselines.py      naive, seasonal_naive, mean, drift
+├── models/deep.py           WindowDataset, Dense, MultiStepDense, CNN, LSTM, FeedBack, Residual, fit
+├── models/foundation.py     get_device, load_timesfm, timesfm_forecast_fn
+├── models/train_model.py    the benchmark (make train)
+└── visualization/visualize.py  forecast/backtest/fold/ACF/STL/periodogram/leaderboard plots
 ```
 
----
+Every model is wrapped as `forecast_fn(y_train, h, X_train, X_future) -> DataFrame[mean, q10…q90]`, which plugs into `evaluation.backtest`.
 
-## Documentation
+## GPU notes (GTX 960M and other old cards)
 
-- [Developer Guide](docs/developer_guide.md): code style, testing, Git workflow and contributing
-- [Code of Conduct](docs/code_of_conduct.md)
+The default install is **CPU**. TimesFM 3 runs fine there, at about 0.6 s per series with a 512-step context. `get_device()` returns `"cuda"` only if a kernel actually runs, so code never crashes on an unusable GPU.
 
----
+A GTX 960M is Maxwell (sm_50) with 2 GB of VRAM. It can't use the default torch wheel (CUDA 13), and CUDA 12.8+ wheels dropped sm_50. To experiment anyway (driver must support CUDA ≥ 12.6):
+
+```bash
+uv pip install "torch==2.7.*" --index-url https://download.pytorch.org/whl/cu126
+uv run python -c "from tsforecasting.models.foundation import get_device; print(get_device())"
+```
+
+Then run the timing cell at the end of notebook 07. TimesFM's fp32 weights (~1.3 GB) barely fit, so expect a modest speed-up at best. `uv sync` restores the CPU setup.
+
+## Development
+
+```bash
+make check   # ruff format + ruff check + mypy
+make test    # pytest
+```
 
 ## License
 
-This project is licensed under the BSD-3-Clause License. See the [LICENSE](LICENSE) file for details.
+BSD-3-Clause. See [LICENSE](LICENSE).
